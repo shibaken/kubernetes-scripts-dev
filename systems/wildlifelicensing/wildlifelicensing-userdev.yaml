@@ -55,7 +55,7 @@ spec:
                 name: {{system}}-{{namespace}}-userdev
                 optional: false                
           name: {{system}}-userdev
-          image: ghcr.io/dbca-wa/docker_app_dev:wildlifelicensing_dev_latest_seg
+          image: ghcr.io/dbca-wa/docker-apps-dev:wildlifelicensing_django5_dev_latest
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
