@@ -1,0 +1,120 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{system}}-userdev
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate  
+  selector:
+    matchLabels:
+      workload.user.cattle.io/workloadselector: apps.deployment-{{namespace}}-{{system}}-userdev
+  template:
+    metadata:
+      labels:
+        workload.user.cattle.io/workloadselector: apps.deployment-{{namespace}}-{{system}}-userdev
+    spec:
+      securityContext:
+        fsGroup: 5000                 # Automatically updates disk contents to group 20000
+        supplementalGroups: [5000]
+        fsGroupChangePolicy: "OnRootMismatch" # Skips chown on subsequent boots      
+      initContainers:
+        - name: folder-initializer
+          image: ghcr.io/dbca-wa/docker-apps-dev:busybox_base_latest
+          # Mount the raw, bare volume WITHOUT subpaths so we can fix the directories
+          volumeMounts:
+            - name: {{system}}-userdev
+              mountPath: /mnt/storage/
+          # We create the folders natively. Because fsGroup is active, 
+          # these folders will inherit group 5000 access.
+          command: ["sh", "-c", "mkdir -p /mnt/storage/data /mnt/storage/container /mnt/storage/geoserver_data /mnt/storage/logs"]              
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 5000   # Standard user, NOT root
+            runAsGroup: 5000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            seccompProfile:
+              type: RuntimeDefault            
+            capabilities:
+              drop:
+                - ALL   
+      tolerations:
+        - effect: NoSchedule
+          key: kubernetes.azure.com/scalesetpriority
+          operator: Equal
+          value: spot                   
+      tolerations:
+        - effect: NoSchedule
+          key: kubernetes.azure.com/scalesetpriority
+          operator: Equal
+          value: spot                   
+      containers:
+        - env:
+            - name: DEBUG
+              value: 'True'
+            - name: ENABLE_WEB
+              value: 'False'
+            - name: ENABLE_CRON
+              value: 'False'
+          envFrom:
+            - secretRef:
+                name: {{system}}-{{namespace}}-userdev
+                optional: false                   
+          name: {{system}}-userdev
+          image: ghcr.io/dbca-wa/build-docker-geoserver:appsteam-geoserver_2_28_latest 
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              name: tcp8080
+              protocol: TCP
+          stdin: true          
+          tty: true     
+          volumeMounts:
+            - mountPath: /data/
+              name: {{system}}-userdev
+              subPath: data                  
+            - mountPath: /opt/geoserver_data
+              name: {{system}}-userdev
+              subPath: geoserver_data  
+            - mountPath: /container/logs
+              name: {{system}}-userdev
+              subPath: logs     
+            - mountPath: /rclone-mounts
+              name: thermal-image-share-userdev
+              subPath: rclone-mounts      
+            - mountPath: /opt/geoserver_data/data
+              name: {{system}}-azurefile-userdev                     
+          workingDir: /opt/geoserver_data
+          resources:
+            limits:
+              cpu: '1'
+              memory: 6Gi
+            requests:
+              cpu: 10m
+              memory: 2Gi          
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 5000   # Standard user, NOT root
+            runAsGroup: 5000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            seccompProfile:
+              type: RuntimeDefault            
+            capabilities:
+              drop:
+                - ALL   
+      volumes:
+        - name: {{system}}-userdev
+          persistentVolumeClaim:
+            claimName: {{system}}-userdev
+        - name: thermal-image-share-userdev
+          persistentVolumeClaim:
+            claimName: thermal-image-share-userdev
+        - name: {{system}}-azurefile-userdev
+          persistentVolumeClaim:
+            claimName: {{system}}-azurefile-userdev          
+
+
+            
+            
